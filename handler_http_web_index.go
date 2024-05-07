@@ -133,7 +133,6 @@ func (h *HTTPWebIndexHandler) ServeHTTP(rw http.ResponseWriter, req *http.Reques
 	}
 
 	if !fi.IsDir() {
-
 		file, err := os.Open(fullname)
 		if err != nil {
 			http.Error(rw, "500 internal server error", http.StatusInternalServerError)

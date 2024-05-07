@@ -1,59 +1,134 @@
 package main
 
 import (
+	"errors"
 	"expvar"
 	"net"
 	"net/http"
 	"net/http/pprof"
 	"net/netip"
+	"regexp"
 	"strings"
 	"text/template"
 
 	"github.com/phuslu/log"
 )
 
+// Refer: https://juejin.cn/post/6908623305129852942
+type RouterModifier byte
+
+const (
+	_                      RouterModifier = iota
+	RouterModifierSpace                   = 1
+	RouterModifierEqual                   = 2 // =
+	RouterModifierWavy                    = 3 // ~
+	RouterModifierWavyStar                = 4 // ~*
+	RouterModifierPrefix                  = 5 // ^~
+	RouterModifierWildcard                = 6 // *?[]
+)
+
+type httpWebRouter struct {
+	location string
+	handler  HTTPHandler
+	modifier RouterModifier
+	pattern  string
+	re       *regexp.Regexp
+}
+
+func (r *httpWebRouter) Load() error {
+	r.pattern = r.location
+
+	var err error
+	if before, after, found := strings.Cut(r.location, " "); found {
+		switch before {
+		case " ":
+			r.modifier = RouterModifierSpace
+		case "=":
+			r.modifier = RouterModifierEqual
+		case "~":
+			r.modifier = RouterModifierWavy
+			r.re, err = regexp.Compile(after)
+		case "~*":
+			r.modifier = RouterModifierWavyStar
+			r.re, err = regexp.Compile("(?i)" + after)
+		case "^~":
+			r.modifier = RouterModifierPrefix
+		default:
+			return errors.New("unknown location modifier")
+		}
+		r.pattern = after
+		if err != nil {
+			return err
+		}
+	} else if strings.ContainsAny(r.location, "*?[]") {
+		r.modifier = RouterModifierWildcard
+	} else {
+		r.modifier = RouterModifierEqual
+	}
+
+	err = r.handler.Load()
+	if err != nil {
+		return nil
+	}
+
+	return nil
+}
+
+func (r *httpWebRouter) Match(path string) bool {
+	switch r.modifier {
+	case RouterModifierSpace:
+		return strings.HasPrefix(path, r.pattern)
+	case RouterModifierEqual:
+		return r.pattern == path
+	case RouterModifierWavy:
+		return r.re.MatchString(path)
+	case RouterModifierWavyStar:
+		return r.re.MatchString(path)
+	case RouterModifierPrefix:
+		return strings.HasPrefix(path, r.pattern)
+	case RouterModifierWildcard:
+		return WildcardMatch(r.location, path)
+	default:
+		return false
+	}
+}
+
 type HTTPWebHandler struct {
 	Config    HTTPConfig
 	Transport *http.Transport
 	Functions template.FuncMap
 
-	wildcards []struct {
-		location string
-		handler  HTTPHandler
-	}
-	mux *http.ServeMux
+	routers []httpWebRouter
+	mux     *http.ServeMux
 }
 
 func (h *HTTPWebHandler) Load() error {
-	type router struct {
-		location string
-		handler  HTTPHandler
-	}
-
-	var routers []router
+	var routers []httpWebRouter
 	for _, web := range h.Config.Web {
 		switch {
 		case web.Cgi.Enabled:
-			routers = append(routers, router{
-				web.Location,
-				&HTTPWebCgiHandler{
+			routers = append(routers, httpWebRouter{
+				location: web.Location,
+				handler: &HTTPWebCgiHandler{
 					Location:   web.Location,
+					Runtime:    web.Cgi.Runtime,
 					Root:       web.Cgi.Root,
 					DefaultApp: web.Cgi.DefaultAPP,
+					Param:      web.Cgi.Param,
 				},
 			})
 		case web.Dav.Enabled:
-			routers = append(routers, router{
-				web.Location,
-				&HTTPWebDavHandler{
+			routers = append(routers, httpWebRouter{
+				location: web.Location,
+				handler: &HTTPWebDavHandler{
 					Root:              web.Dav.Root,
 					AuthBasicUserFile: web.Dav.AuthBasicUserFile,
 				},
 			})
 		case web.Index.Root != "" || web.Index.Body != "" || web.Index.File != "":
-			routers = append(routers, router{
-				web.Location,
-				&HTTPWebIndexHandler{
+			routers = append(routers, httpWebRouter{
+				location: web.Location,
+				handler: &HTTPWebIndexHandler{
 					Functions: h.Functions,
 					Location:  web.Location,
 					Root:      web.Index.Root,
@@ -63,9 +138,9 @@ func (h *HTTPWebHandler) Load() error {
 				},
 			})
 		case web.Proxy.Pass != "":
-			routers = append(routers, router{
-				web.Location,
-				&HTTPWebProxyHandler{
+			routers = append(routers, httpWebRouter{
+				location: web.Location,
+				handler: &HTTPWebProxyHandler{
 					Transport:         h.Transport,
 					Functions:         h.Functions,
 					Pass:              web.Proxy.Pass,
@@ -80,23 +155,22 @@ func (h *HTTPWebHandler) Load() error {
 	var root HTTPHandler
 	h.mux = http.NewServeMux()
 	for _, x := range routers {
-		err := x.handler.Load()
+		err := x.Load()
 		if err != nil {
 			log.Fatal().Err(err).Str("web_location", x.location).Msgf("%T.Load() return error: %+v", x.handler, err)
 		}
 		log.Info().Str("web_location", x.location).Msgf("%T.Load() ok", x.handler)
 
-		if x.location == "/" {
+		if x.pattern == "/" {
 			root = x.handler
 			continue
 		}
 
-		if strings.ContainsAny(x.location, "*?[]") {
-			h.wildcards = append(h.wildcards, x)
-			continue
+		if x.modifier == RouterModifierEqual {
+			h.mux.Handle(x.location, x.handler)
+		} else {
+			h.routers = append(h.routers, x)
 		}
-
-		h.mux.Handle(x.location, x.handler)
 	}
 
 	h.mux.HandleFunc("/debug/", func(rw http.ResponseWriter, req *http.Request) {
@@ -135,12 +209,12 @@ func (h *HTTPWebHandler) Load() error {
 }
 
 func (h *HTTPWebHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
-	if config, _ := h.Config.ServerConfig[req.Host]; !config.DisableHttp3 && req.ProtoMajor != 3 {
+	if config, ok := h.Config.ServerConfig[req.Host]; ok && !config.DisableHttp3 && req.ProtoMajor != 3 {
 		_, port, _ := net.SplitHostPort(req.Context().Value(http.LocalAddrContextKey).(net.Addr).String())
 		rw.Header().Add("Alt-Svc", `h3=":`+port+`"; ma=2592000,h3-29=":`+port+`"; ma=2592000`)
 	}
-	for _, x := range h.wildcards {
-		if WildcardMatch(x.location, req.URL.Path) {
+	for _, x := range h.routers {
+		if x.Match(req.URL.Path) {
 			x.handler.ServeHTTP(rw, req)
 			return
 		}

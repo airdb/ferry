@@ -42,9 +42,11 @@ type HTTPConfig struct {
 	Web []struct {
 		Location string `json:"location" yaml:"location"`
 		Cgi      struct {
-			Enabled    bool   `json:"enabled" yaml:"enabled"`
-			Root       string `json:"root" yaml:"root"`
-			DefaultAPP string `json:"default_app" yaml:"default_app"`
+			Enabled    bool              `json:"enabled" yaml:"enabled"`
+			Runtime    []string          `json:"runtime" yaml:"runtime"`
+			Root       string            `json:"root" yaml:"root"`
+			DefaultAPP string            `json:"default_app" yaml:"default_app"`
+			Param      map[string]string `json:"param" yaml:"param"`
 		} `json:"cgi" yaml:"cgi"`
 		Dav struct {
 			Enabled           bool   `json:"enabled" yaml:"enabled"`
