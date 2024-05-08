@@ -174,7 +174,7 @@ func (h *HTTPWebHandler) Load() error {
 	}
 
 	h.mux.HandleFunc("/debug/", func(rw http.ResponseWriter, req *http.Request) {
-		if ap, err := netip.ParseAddrPort(req.RemoteAddr); err == nil && !ap.Addr().IsLoopback() && !ap.Addr().IsPrivate() {
+		if ap, err := netip.ParseAddrPort(req.RemoteAddr); err == nil && !ap.Addr().IsGlobalUnicast() {
 			http.Error(rw, "403 forbidden", http.StatusForbidden)
 			return
 		}
@@ -196,12 +196,10 @@ func (h *HTTPWebHandler) Load() error {
 	})
 
 	h.mux.HandleFunc("/", func(rw http.ResponseWriter, req *http.Request) {
-
 		if root != nil {
 			root.ServeHTTP(rw, req)
 			return
 		}
-
 		http.NotFound(rw, req)
 	})
 

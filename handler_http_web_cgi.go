@@ -81,7 +81,8 @@ func (h *HTTPWebCgiHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request)
 			http.Error(rw, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		if k == "SCRIPT_FILENAME" {
+		switch k {
+		case "SCRIPT_FILENAME":
 			fullname = sb.String()
 		}
 		envs = append(envs, fmt.Sprintf("%s=%s", k, sb.String()))

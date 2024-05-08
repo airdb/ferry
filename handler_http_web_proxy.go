@@ -239,7 +239,7 @@ func (h *HTTPWebProxyHandler) setHeaders(req *http.Request, ri *RequestInfo) {
 		key, value := parts[0], strings.TrimSpace(parts[1])
 		switch key {
 		case "host", "Host", "HOST":
-			req.URL.Host = value
+			// req.URL.Host = value
 			req.Host = value
 		default:
 			req.Header.Set(key, value)
