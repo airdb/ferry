@@ -77,6 +77,11 @@ func (f *Functions) Load() error {
 	f.FuncMap["any"] = f.any
 	f.FuncMap["ternary"] = f.ternary
 
+	// misc
+	f.FuncMap["nowNano"] = func() int64 {
+		return time.Now().UnixNano()
+	}
+
 	return nil
 }
 
