@@ -9,8 +9,11 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"strconv"
 	"testing"
 	"time"
+
+	"github.com/phuslu/log"
 )
 
 func TestHTTPWebCgiHandler_Load(t *testing.T) {
@@ -82,7 +85,7 @@ func TestHTTPWebCgiHandler_ServeHTTP(t *testing.T) {
 				rw:  httptest.NewRecorder(),
 				req: httptest.NewRequest("GET", "/time.cgi", nil),
 				body: func() string {
-					return fmt.Sprintf("%d", time.Now().Unix())
+					return strconv.FormatInt(time.Now().Unix(), 10)
 				},
 			},
 		},
@@ -128,5 +131,37 @@ func TestHTTPWebCgiHandler_ServeHTTP(t *testing.T) {
 				t.Errorf("HTTPWebCgiHandler.ServeHTTP() body = %v, wantBody %v", string(body), wantBody)
 			}
 		})
+	}
+}
+
+func BenchmarkHTTPWebCgiHandler_ServeHTTP(b *testing.B) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	phpcgi, err := exec.LookPath("php-cgi")
+	if err != nil {
+		b.Fatal("can not find php-cgi")
+	}
+	h := &HTTPWebCgiHandler{
+		Runtime:  []string{"cgi", "php-cgi"},
+		Location: "*.php",
+		Root:     path.Join(cwd, "testdata"),
+		phpcgi:   phpcgi,
+	}
+	rw := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/time.php", nil)
+	req = req.WithContext(
+		context.WithValue(req.Context(), RequestInfoContextKey, &RequestInfo{}),
+	)
+
+	log.DefaultLogger.SetLevel(log.WarnLevel)
+
+	for i := 0; i < b.N; i++ {
+		h.ServeHTTP(rw, req)
+		if rw.Result().StatusCode != http.StatusOK {
+			b.Fatal("cig response status code error")
+		}
 	}
 }

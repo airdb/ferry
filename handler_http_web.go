@@ -117,6 +117,17 @@ func (h *HTTPWebHandler) Load() error {
 					Param:      web.Cgi.Param,
 				},
 			})
+		case web.Fcgi.Enabled:
+			routers = append(routers, httpWebRouter{
+				location: web.Location,
+				handler: &HTTPWebFcgiHandler{
+					Root:       web.Fcgi.Root,
+					DefaultApp: web.Fcgi.DefaultAPP,
+					Pass:       web.Fcgi.Pass,
+					KeepAlive:  web.Fcgi.KeepAlive,
+					Param:      web.Fcgi.Param,
+				},
+			})
 		case web.Dav.Enabled:
 			routers = append(routers, httpWebRouter{
 				location: web.Location,

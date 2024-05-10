@@ -7,7 +7,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"strings"
 )
 
 // GenCurlFromRequest generates a curl command that can be used when debugging issues
@@ -87,7 +86,7 @@ func getHeaders(h http.Header, Host string) string {
 	ret := ""
 	for header, values := range h {
 		for _, value := range values {
-			if strings.ToLower(header) != "host" {
+			if ToLower(header) != "host" {
 				ret += fmt.Sprintf(" --header '%s: %v'", header, value)
 			}
 		}

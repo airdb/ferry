@@ -112,7 +112,7 @@ func (f *Functions) geoip(ip string) GeoipInfo {
 	}
 
 	var country, region, city string
-	if f.RegionResolver.MaxmindReader != nil {
+	if f.RegionResolver.GetCityDB() != nil {
 		country, region, city, _ = f.RegionResolver.LookupCity(context.Background(), net.ParseIP(ip))
 	}
 

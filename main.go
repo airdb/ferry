@@ -16,7 +16,6 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
-	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -27,7 +26,6 @@ import (
 	"github.com/apernet/quic-go"
 	"github.com/apernet/quic-go/http3"
 	"github.com/mileusna/useragent"
-	"github.com/oschwald/maxminddb-golang"
 	"github.com/phuslu/geosite"
 	"github.com/phuslu/log"
 	"github.com/phuslu/lru"
@@ -49,8 +47,6 @@ func main() {
 		println("cannot get executable path")
 		os.Exit(1)
 	}
-
-	os.Chdir(filepath.Dir(executable))
 
 	if len(os.Args) > 1 && os.Args[1] == "-version" {
 		println(version)
@@ -208,11 +204,9 @@ func main() {
 		Resolver: resolver,
 	}
 
-	if names, _ := filepath.Glob("*.mmdb"); len(names) != 0 {
-		regionResolver.MaxmindReader, err = maxminddb.Open(names[0])
-		if err != nil {
-			log.Fatal().Err(err).Str("geoip2_database", names[0]).Msg("load geoip2_database error")
-		}
+	err = regionResolver.Load("*.mmdb")
+	if err != nil {
+		log.Fatal().Err(err).Msg("load geoip2_database error")
 	}
 
 	// global dialer
@@ -534,18 +528,18 @@ func main() {
 	}
 
 	// listen and serve http
-	h1handlers := map[string]HTTPHandler{}
-	for _, httpConfig := range config.Http {
-		httpConfig.ServerName = append(httpConfig.ServerName, "", "localhost", "127.0.0.1")
+	h1handlers := map[string]map[string]HTTPHandler{}
+	for _, server := range config.Http {
+		server.ServerName = append(server.ServerName, "", "localhost", "127.0.0.1")
 		if name, err := os.Hostname(); err == nil {
-			httpConfig.ServerName = append(httpConfig.ServerName, name)
+			server.ServerName = append(server.ServerName, name)
 		}
 		if ip, err := GetPreferedLocalIP(); err == nil {
-			httpConfig.ServerName = append(httpConfig.ServerName, ip.String())
+			server.ServerName = append(server.ServerName, ip.String())
 		}
 		handler := &HTTPServerHandler{
 			ForwardHandler: &HTTPForwardHandler{
-				Config:         httpConfig,
+				Config:         server,
 				ForwardLogger:  forwardLogger,
 				LocalDialer:    dialer,
 				LocalTransport: transport,
@@ -553,32 +547,39 @@ func main() {
 				Functions:      functions.FuncMap,
 			},
 			WebHandler: &HTTPWebHandler{
-				Config:    httpConfig,
+				Config:    server,
 				Transport: transport,
 				Functions: functions.FuncMap,
 			},
-			ServerNames:    httpConfig.ServerName,
+			ServerNames:    server.ServerName,
 			ClientHelloMap: tlsConfigurator.ClientHelloMap,
 			UserAgentMap:   useragentMap,
 			RegionResolver: regionResolver,
-			Config:         httpConfig,
+			Config:         server,
 		}
 
 		for _, h := range []HTTPHandler{handler.ForwardHandler, handler.WebHandler, handler} {
 			err = h.Load()
 			if err != nil {
-				log.Fatal().Err(err).Strs("server_name", httpConfig.ServerName).Msgf("%T.Load() return error: %+v", h, err)
+				log.Fatal().Err(err).Strs("server_name", server.ServerName).Msgf("%T.Load() return error: %+v", h, err)
 			}
-			log.Info().Strs("server_name", httpConfig.ServerName).Msgf("%T.Load() ok", h)
+			log.Info().Strs("server_name", server.ServerName).Msgf("%T.Load() ok", h)
 		}
 
-		for _, listen := range httpConfig.Listen {
-			h1handlers[listen] = handler
+		for _, listen := range server.Listen {
+			for _, name := range server.ServerName {
+				hs, ok := h1handlers[listen]
+				if !ok {
+					hs = make(map[string]HTTPHandler)
+					h1handlers[listen] = hs
+				}
+				hs[name] = handler
+			}
 		}
 	}
 
-	for addr, handler := range h1handlers {
-		addr, handler := addr, handler
+	for addr, handlers := range h1handlers {
+		addr, handlers := addr, handlers
 
 		var ln net.Listener
 
@@ -589,7 +590,27 @@ func main() {
 		log.Info().Str("version", version).Str("address", ln.Addr().String()).Msg("ferry listen and serve")
 
 		server := &http.Server{
-			Handler:  handler,
+			Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				var serverName = r.Header.Get("Host")
+				if serverName == "" {
+					serverName = r.Host
+				}
+
+				h, _ := handlers[serverName]
+				if h == nil {
+					for key, value := range handlers {
+						if key != "" && key[0] == '*' && strings.HasSuffix(serverName, key[1:]) {
+							h = value
+							break
+						}
+					}
+				}
+				if h == nil {
+					http.NotFound(w, r)
+					return
+				}
+				h.ServeHTTP(w, r)
+			}),
 			ErrorLog: log.DefaultLogger.Std("", 0),
 		}
 

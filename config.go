@@ -48,6 +48,14 @@ type HTTPConfig struct {
 			DefaultAPP string            `json:"default_app" yaml:"default_app"`
 			Param      map[string]string `json:"param" yaml:"param"`
 		} `json:"cgi" yaml:"cgi"`
+		Fcgi struct {
+			Enabled    bool   `json:"enabled" yaml:"enabled"`
+			Root       string `json:"root" yaml:"root"`
+			DefaultAPP string `json:"default_app" yaml:"default_app"`
+			Pass       string `json:"pass" yaml:"pass"`
+			KeepAlive  bool   `json:"keep_alive" yaml:"keep_alive"`
+			Param      string `json:"param" yaml:"param"`
+		} `json:"fcgi" yaml:"fcgi"`
 		Dav struct {
 			Enabled           bool   `json:"enabled" yaml:"enabled"`
 			Root              string `json:"root" yaml:"root"`

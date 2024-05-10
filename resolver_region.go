@@ -3,18 +3,41 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
+	"path/filepath"
 
 	"github.com/oschwald/maxminddb-golang"
 )
 
 type RegionResolver struct {
-	Resolver      *Resolver
-	MaxmindReader *maxminddb.Reader
+	Resolver  *Resolver
+	GeoReader map[string]*maxminddb.Reader
+}
+
+func (r *RegionResolver) Load(pattern string) error {
+	if names, _ := filepath.Glob(pattern); len(names) != 0 {
+		if r.GeoReader == nil {
+			r.GeoReader = make(map[string]*maxminddb.Reader)
+		}
+		for _, name := range names {
+			db, err := maxminddb.Open(name)
+			if err != nil {
+				return errors.Join(fmt.Errorf("can not open %s", name), err)
+			}
+			r.GeoReader[db.Metadata.DatabaseType] = db
+		}
+	}
+	return nil
+}
+
+func (r *RegionResolver) GetCityDB() *maxminddb.Reader {
+	return r.GeoReader["GeoIP2-City"]
 }
 
 func (r *RegionResolver) LookupCity(ctx context.Context, ip net.IP) (string, string, string, error) {
-	if r.MaxmindReader == nil {
+	db := r.GetCityDB()
+	if db == nil {
 		return "", "", "", errors.New("no maxmind database found")
 	}
 
@@ -22,34 +45,37 @@ func (r *RegionResolver) LookupCity(ctx context.Context, ip net.IP) (string, str
 		return "", "", "", errors.New("invalid ip address")
 	}
 
+	type names struct {
+		EN string `maxminddb:"en"`
+	}
+
 	var record struct {
 		Country struct {
 			GeoNameID uint   `maxminddb:"geoname_id"`
-			ISOCode   string `maxminddb:"iso_code"`
+			IsoCode   string `maxminddb:"iso_code"`
 		} `maxminddb:"country"`
 		City struct {
-			GeoNameID uint `maxminddb:"geoname_id"`
-			Names     struct {
-				EN string `maxminddb:"en"`
-			} `maxminddb:"names"`
+			GeoNameID uint  `maxminddb:"geoname_id"`
+			Names     names `maxminddb:"names"`
 		} `maxminddb:"city"`
 		Subdivisions []struct {
 			GeoNameID uint   `maxminddb:"geoname_id"`
 			IsoCode   string `maxminddb:"iso_code"`
-			Names     struct {
-				EN string `maxminddb:"en"`
-			} `maxminddb:"names"`
+			Names     names  `maxminddb:"names"`
 		} `maxminddb:"subdivisions"`
 	}
 
-	err := r.MaxmindReader.Lookup(ip, &record)
+	err := db.Lookup(ip, &record)
+	if err != nil {
+		return "", "", "", err
+	}
 
 	var region string
 	if len(record.Subdivisions) != 0 {
 		region = record.Subdivisions[0].Names.EN
 	}
 
-	return record.Country.ISOCode, region, record.City.Names.EN, err
+	return record.Country.IsoCode, region, record.City.Names.EN, err
 }
 
 func IsBogusChinaIP(ip net.IP) (ok bool) {
