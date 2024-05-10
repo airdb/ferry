@@ -16,19 +16,19 @@ case $(uname -m) in
 esac
 
 domain=$(curl -sS whatismyip.akamai.com | tr . -).nip.io
-checksum=$(curl https://phus.lu/liner/checksums.txt | grep -E "liner_linux_${arch}-[0-9]+.tar.xz")
+checksum=$(curl https://airdb.dev/ferry/checksums.txt | grep -E "ferry_linux_${arch}-[0-9]+.tar.xz")
 filename=$(echo $checksum | awk '{print $2}')
 pacfile=$(shuf -er -n6 1 2 3 4 5 6 7 8 9 | tr -d '\n').pac
 
-if test -d liner; then
-  cd liner
-elif test -x liner.sh; then
+if test -d ferry; then
+  cd ferry
+elif test -x ferry.sh; then
   true
 else
-  mkdir liner && cd liner
+  mkdir ferry && cd ferry
 fi
 
-curl http://phus.lu/liner/$filename > $filename
+curl http://airdb.dev/ferry/$filename > $filename
 if test "$(sha1sum $filename)" != "$checksum"; then
   echo "$filename sha1sum mismatched, please check your network!"
   rm -rf $filename
@@ -69,19 +69,19 @@ https:
           pass: 'http://127.0.0.1:80'
 EOF
 
-cat <<EOF > liner.service
+cat <<EOF > ferry.service
 [Unit]
 Wants=network-online.target
 After=network.target network-online.target
-Description=liner
+Description=ferry
 
 [Service]
 Type=forking
 KillMode=process
 WorkingDirectory=$(pwd)
-ExecStart=$(pwd)/liner.sh start
-ExecStop=$(pwd)/liner.sh stop
-ExecReload=$(pwd)/liner.sh reload
+ExecStart=$(pwd)/ferry.sh start
+ExecStop=$(pwd)/ferry.sh stop
+ExecReload=$(pwd)/ferry.sh reload
 
 [Install]
 WantedBy=multi-user.target
@@ -90,7 +90,7 @@ EOF
 echo ENV=production > .env
 mv china.pac $pacfile
 
-sudo ./liner.sh restart
-hash systemctl 2>/dev/null && sudo systemctl enable $(pwd)/liner.service
+sudo ./ferry.sh restart
+hash systemctl 2>/dev/null && sudo systemctl enable $(pwd)/ferry.service
 
 echo "https://$domain/$pacfile"

@@ -10,11 +10,11 @@ global:
 dialer:
   wireguard: local://wg0
   torsocks: socks5h://127.0.0.1:9050
-  sshtun: ssh://phuslu:123456@phus.lu:22/?timeout=8&max_clients=4&key=/home/phuslu/.ssh/id_rsa
-  proxyws: wss://phuslu:123456@www.phus.lu:443/wss/connect?h=%s&p=%d
-  proxy1: https://user:passwd@proxy1.example.org:443/?user_agent=liner-1984
-  proxy2: http2://foobar:123456@proxy2.example.com:443/?user_agent=liner-1984&max_clients=8
-  proxy3: http3://foobar:123456@proxy3.example.com:443/?user_agent=liner-1984
+  sshtun: ssh://airdb:123456@airdb.dev:22/?timeout=8&max_clients=4&key=/home/airdb/.ssh/id_rsa
+  proxyws: wss://airdb:123456@www.airdb.dev:443/wss/connect?h=%s&p=%d
+  proxy1: https://user:passwd@proxy1.example.org:443/?user_agent=ferry-1984
+  proxy2: http2://foobar:123456@proxy2.example.com:443/?user_agent=ferry-1984&max_clients=8
+  proxy3: http3://foobar:123456@proxy3.example.com:443/?user_agent=ferry-1984
 https:
   - listen: [':443']
     server_name: ['example.org']
@@ -50,7 +50,7 @@ https:
           bypass_auth
         {{else if contains " YaBrowser/" .Request.UserAgent}}
           bypass_auth
-        {{else if contains "ip.phus.lu" .Request.Host}}
+        {{else if contains "ip.airdb.dev" .Request.Host}}
           allow_ip
         {{else if .Request.Header.Get "proxy-authorization"}}
           verify_auth
@@ -73,7 +73,7 @@ https:
           set_headers: "Host: 1.1.1.1"
       - location: /china.pac
         index:
-          file: /home/phuslu/liner/china.pac
+          file: /home/airdb/ferry/china.pac
       - location: /
         proxy:
           pass: 'http://127.0.0.1:80'
@@ -98,7 +98,7 @@ http:
           bypass_auth
         {{else if contains " YaBrowser/" .Request.UserAgent}}
           bypass_auth
-        {{else if contains "ip.phus.lu" .Request.Host}}
+        {{else if contains "ip.airdb.dev" .Request.Host}}
           allow_ip
         {{else if .Request.Header.Get "proxy-authorization"}}
           verify_auth
@@ -119,7 +119,7 @@ http:
     web:
       - location: /
         index:
-          root: 'C:/Users/phuslu/Desktop'
+          root: '/home/airdb/Desktop'
 socks:
   - listen: [':1081']
     server_name: ['127.0.0.1']

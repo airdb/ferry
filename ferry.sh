@@ -1,22 +1,22 @@
 #!/bin/sh
 #
-#       /etc/rc.d/init.d/liner
+#       /etc/rc.d/init.d/ferry
 #
-#       liner daemon
+#       ferry daemon
 #
 # chkconfig:   2345 95 05
-# description: a liner script
+# description: a ferry script
 
 ### BEGIN INIT INFO
-# Provides:       liner
+# Provides:       ferry
 # Required-Start:
 # Required-Stop:
 # Should-Start:
 # Should-Stop:
 # Default-Start: 2 3 4 5
 # Default-Stop:  0 1 6
-# Short-Description: liner
-# Description: liner
+# Short-Description: ferry
+# Description: ferry
 ### END INIT INFO
 
 cd "$(dirname "$0")"
@@ -24,11 +24,11 @@ cd "$(dirname "$0")"
 test -f .env && . $(pwd -P)/.env
 
 _start() {
-    setcap 'cap_net_bind_service=ep' liner
+    setcap 'cap_net_bind_service=ep' ferry
     test $(ulimit -n) -lt 100000 && ulimit -n 100000
-    (env ENV=${ENV:-development} is_supervisor_process=1 $(pwd)/liner) <&- >liner.error.log 2>&1 &
+    (env ENV=${ENV:-development} is_supervisor_process=1 $(pwd)/ferry) <&- >ferry.error.log 2>&1 &
     local pid=$!
-    echo -n "Starting liner(${pid}): "
+    echo -n "Starting ferry(${pid}): "
     sleep 1
     if (ps ax 2>/dev/null || ps) | grep "${pid} " >/dev/null 2>&1; then
         echo "OK"
@@ -38,9 +38,9 @@ _start() {
 }
 
 _stop() {
-    local pid="$(pidof liner)"
+    local pid="$(pidof ferry)"
     if test -n "${pid}"; then
-        echo -n "Stopping liner(${pid}): "
+        echo -n "Stopping ferry(${pid}): "
         if kill ${pid}; then
             echo "OK"
         else
@@ -56,7 +56,7 @@ _restart() {
 }
 
 _reload() {
-    pkill -HUP -o -x liner
+    pkill -HUP -o -x ferry
 }
 
 _usage() {

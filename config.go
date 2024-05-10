@@ -171,7 +171,7 @@ func NewConfig(filename string) (*Config, error) {
 	}
 
 	if filename == "development.yaml" {
-		fmt.Fprintf(os.Stderr, "%s WAN 1 config.go:122 > liner is running in the development mode.\n", timeNow().Format("15:04:05"))
+		fmt.Fprintf(os.Stderr, "%s WAN 1 config.go:122 > ferry is running in the development mode.\n", timeNow().Format("15:04:05"))
 	}
 
 	return c, nil

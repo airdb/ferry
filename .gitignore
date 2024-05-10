@@ -6,8 +6,8 @@ __debug_bin*
 .env
 .goenv
 .DS_Store
-liner
-liner.service
+ferry
+ferry.service
 production*.yaml
 development.yaml
 go.env

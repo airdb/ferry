@@ -5,23 +5,23 @@ global:
   dial_timeout: 30
   dns_cache_duration: 10m
 dialer:
-  phuslu: http3://phuslu:123456@phus.lu:443/?user_agent=liner-1984
-http:
-  - listen: [':2080']
-    server_name: ['127.0.0.1', 'localhost']
+  airdb: http2://airdb:123456@airdb.dev:443/?max_clients=8
+socks:
+  - listen: [':1080']
+    server_name: ['127.0.0.1']
     forward:
       policy: bypass_auth
-      dialer: phuslu
+      dialer: airdb
     web:
       - location: /
         index:
-          root: 'C:/Users/phuslu/Desktop'
+          root: '/home/airdb/Desktop'
 stream:
   - listen: [':8118']
     proxy_pass: tcp4://127.0.0.1:8118
-    dialer: phuslu
+    dialer: airdb
     # dial_timeout: 8
   - listen: [':2221']
     proxy_pass: tcp4://127.0.0.1:2221
-    dialer: phuslu
+    dialer: airdb
     # dial_timeout: 8

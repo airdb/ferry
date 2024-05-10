@@ -40,7 +40,7 @@ var (
 	version = "1984"
 	timeNow = time.Now
 
-	DefaultUserAgent = "Liner/" + version
+	DefaultUserAgent = "Ferry/" + version
 )
 
 func main() {
@@ -463,7 +463,7 @@ func main() {
 			log.Fatal().Err(err).Str("address", addr).Msg("net.Listen error")
 		}
 
-		log.Info().Str("version", version).Str("address", ln.Addr().String()).Msg("liner listen and serve tls")
+		log.Info().Str("version", version).Str("address", ln.Addr().String()).Msg("ferry listen and serve tls")
 
 		server := &http.Server{
 			Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -586,7 +586,7 @@ func main() {
 			log.Fatal().Err(err).Str("address", addr).Msg("net.Listen error")
 		}
 
-		log.Info().Str("version", version).Str("address", ln.Addr().String()).Msg("liner listen and serve")
+		log.Info().Str("version", version).Str("address", ln.Addr().String()).Msg("ferry listen and serve")
 
 		server := &http.Server{
 			Handler:  handler,
@@ -612,7 +612,7 @@ func main() {
 				log.Fatal().Err(err).Str("address", addr).Msg("net.Listen error")
 			}
 
-			log.Info().Str("version", version).Str("address", ln.Addr().String()).Msg("liner listen and serve socks")
+			log.Info().Str("version", version).Str("address", ln.Addr().String()).Msg("ferry listen and serve socks")
 
 			h := &SocksHandler{
 				Config:         socksConfig,
@@ -631,7 +631,7 @@ func main() {
 				for {
 					conn, err := ln.Accept()
 					if err != nil {
-						log.Error().Err(err).Str("version", version).Str("address", ln.Addr().String()).Msg("liner accept socks connection error")
+						log.Error().Err(err).Str("version", version).Str("address", ln.Addr().String()).Msg("ferry accept socks connection error")
 						time.Sleep(10 * time.Millisecond)
 					}
 					go h.ServeConn(context.Background(), conn)
@@ -649,7 +649,7 @@ func main() {
 				log.Fatal().Err(err).Str("address", addr).Msg("net.Listen error")
 			}
 
-			log.Info().Str("version", version).Str("address", ln.Addr().String()).Msg("liner listen and forward port")
+			log.Info().Str("version", version).Str("address", ln.Addr().String()).Msg("ferry listen and forward port")
 
 			h := &StreamHandler{
 				Config:         streamConfig,
@@ -667,7 +667,7 @@ func main() {
 				for {
 					conn, err := ln.Accept()
 					if err != nil {
-						log.Error().Err(err).Str("version", version).Str("address", ln.Addr().String()).Msg("liner accept stream connection error")
+						log.Error().Err(err).Str("version", version).Str("address", ln.Addr().String()).Msg("ferry accept stream connection error")
 						time.Sleep(10 * time.Millisecond)
 					}
 					go h.ServeConn(conn)
@@ -723,13 +723,13 @@ func main() {
 
 	switch <-c {
 	case syscall.SIGTERM, syscall.SIGINT:
-		log.Info().Msg("liner flush logs and exit.")
+		log.Info().Msg("ferry flush logs and exit.")
 		log.DefaultLogger.Writer.(io.Closer).Close()
 		os.Exit(0)
 	}
 
-	log.Warn().Msg("liner start graceful shutdown...")
-	SetProcessName("liner: (graceful shutdown)")
+	log.Warn().Msg("ferry start graceful shutdown...")
+	SetProcessName("ferry: (graceful shutdown)")
 
 	var wg sync.WaitGroup
 	for _, server := range servers {
@@ -747,5 +747,5 @@ func main() {
 	}
 	wg.Wait()
 
-	log.Info().Msg("liner server shutdown")
+	log.Info().Msg("ferry server shutdown")
 }

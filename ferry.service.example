@@ -1,0 +1,15 @@
+[Unit]
+Wants=network-online.target
+After=network.target network-online.target
+Description=ferry
+
+[Service]
+Type=forking
+KillMode=process
+WorkingDirectory=/home/airdb/ferry
+ExecStart=/home/airdb/ferry/ferry.sh start
+ExecStop=/home/airdb/ferry/ferry.sh stop
+ExecReload=/home/airdb/ferry/ferry.sh reload
+
+[Install]
+WantedBy=multi-user.target

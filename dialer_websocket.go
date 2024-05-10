@@ -19,7 +19,7 @@ import (
 var _ Dialer = (*WebsocketDialer)(nil)
 
 type WebsocketDialer struct {
-	EndpointFormat string // E.g. https://www.phus.lu/wss/connect?host=%s&port=%d
+	EndpointFormat string // E.g. https://www.airdb.dev/wss/connect?host=%s&port=%d
 	Username       string
 	Password       string
 	UserAgent      string

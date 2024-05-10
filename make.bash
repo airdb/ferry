@@ -3,19 +3,19 @@
 set -ex
 
 cd "$(dirname "$0")"
-PROJECT=liner
+PROJECT=ferry
 BUILDROOT=build
 
 REVSION=$(git rev-list --count HEAD)
 LDFLAGS="-s -w -X main.version=${REVSION}"
-SOURCES="README.md china.pac autoindex.html example.yaml liner.sh"
+SOURCES="README.md china.pac autoindex.html example.yaml ferry.sh"
 
 GOOS=${GOOS:-$(go env GOOS)}
 GOARCH=${GOARCH:-$(go env GOARCH)}
 CGO_ENABLED=${CGO_ENABLED:-$(go env CGO_ENABLED)}
 
 if [ "${GOOS}" == "windows" ]; then
-    SOURCES="README.md china.pac example.yaml liner-gui.exe"
+    SOURCES="README.md china.pac example.yaml ferry-gui.exe"
     BUILDDIR=${BUILDROOT}/${GOOS}_${GOARCH}
     DISTFILE=${PROJECT}_${GOOS}_${GOARCH}-${REVSION}
     GOEXE=.exe

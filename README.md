@@ -1,4 +1,4 @@
 ### Installation
 ```
-curl phus.lu/liner | bash
+curl airdb.dev/ferry | bash
 ```

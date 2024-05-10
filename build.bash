@@ -50,12 +50,12 @@ EOF
 function release() {
 	pushd build
 
-	sha1sum liner_* >checksums.txt
+	sha1sum ferry_* >checksums.txt
 
-	local ssh_host=phus.lu
+	local ssh_host=airdb.dev
 	ssh-keyscan -H ${ssh_host} | tee -a ~/.ssh/known_hosts
-	sshpass -p "${SSH_PASSWORD}" ssh phuslu@${ssh_host} 'rm -rf /home/phuslu/web/liner/liner_*'
-	sshpass -p "${SSH_PASSWORD}" rsync --progress -avz liner_* checksums.txt "phuslu@${ssh_host}:/home/phuslu/web/liner/"
+	sshpass -p "${SSH_PASSWORD}" ssh airdb@${ssh_host} 'rm -rf /home/airdb/web/ferry/ferry_*'
+	sshpass -p "${SSH_PASSWORD}" rsync --progress -avz ferry_* checksums.txt "airdb@${ssh_host}:/home/airdb/web/ferry/"
 
 	popd
 }
