@@ -1,7 +1,11 @@
 certs/*
 pki/*
+build/*
+.build/*
+__debug_bin*
 .env
 .goenv
+.DS_Store
 liner
 liner.service
 production*.yaml
@@ -10,7 +14,9 @@ go.env
 CHANGELOG.*
 *.csv
 *.log
+*.out
 *.pem
 *.mmdb
+*.test
 *.exe
 *.exe~
