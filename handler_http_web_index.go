@@ -283,7 +283,7 @@ func (h *HTTPWebIndexHandler) addHeaders(rw http.ResponseWriter, req *http.Reque
 
 const autoindexTemplate = `
 <html>
-<head><title>Index of {{.Request.URL.Path}}</title></head>
+<head><title>Index of {{.Request.URL.Path}}</title><link rel="icon" href="data:,"></head>
 <body>
 <h1>Index of {{.Request.URL.Path}}</h1><hr><pre><a href="../">../</a>
 {{range .FileInfos -}}
