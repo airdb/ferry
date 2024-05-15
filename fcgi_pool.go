@@ -12,13 +12,13 @@ var fcgiPools = map[string]*FcgiPool{} // fullAddress => *Pool
 var fcgiPoolsLocker = sync.Mutex{}
 
 type FcgiPool struct {
-	size    uint
+	size    uint16
 	timeout time.Duration
 	clients []*FcgiClient
 	locker  sync.Mutex
 }
 
-func FcgiSharedPool(network string, address string, size uint) *FcgiPool {
+func FcgiSharedPool(network string, address string, size uint16) *FcgiPool {
 	fcgiPoolsLocker.Lock()
 	defer fcgiPoolsLocker.Unlock()
 
@@ -36,8 +36,9 @@ func FcgiSharedPool(network string, address string, size uint) *FcgiPool {
 		size: size,
 	}
 
-	for i := uint(0); i < size; i++ {
+	for i := uint16(0); i < size; i++ {
 		client := NewFcgiClient(network, address)
+		client.id = i
 		client.KeepAlive()
 
 		// prepare one for first request, and left for async request

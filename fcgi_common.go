@@ -9,6 +9,7 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"net/http/httputil"
 	"net/textproto"
 	"regexp"
 	"strconv"
@@ -107,12 +108,12 @@ type FcgiBeginRequestBody struct {
 }
 
 type FcgiEndRequestBody struct {
-	appStatusB3    byte
-	appStatusB2    byte
-	appStatusB1    byte
-	appStatusB0    byte
-	protocolStatus byte
-	reserved       [3]byte
+	AppStatusB3    byte
+	AppStatusB2    byte
+	AppStatusB1    byte
+	AppStatusB0    byte
+	ProtocolStatus byte
+	Reserved       [3]byte
 }
 
 var fcgiCurrentRequestId = uint16(0)
@@ -129,32 +130,15 @@ type FcgiRequest struct {
 	params     map[string]string
 	body       io.Reader
 	bodyLength uint32
-}
 
-var fcgiReqPool = sync.Pool{
-	New: func() any {
-		return &FcgiRequest{}
-	},
+	closedHook []func() error
 }
 
 func NewFcgiRequest() *FcgiRequest {
-	// req := fcgiReqPool.Get().(*FcgiRequest)
-	// req.Reset()
-	// defer fcgiReqPool.Put(req)
-
 	req := &FcgiRequest{}
 	req.id = req.nextId()
 	req.keepAlive = false
 	return req
-}
-
-func (r *FcgiRequest) Reset() {
-	r.id = 0
-	r.keepAlive = false
-	r.timeout = 0
-	r.params = make(map[string]string)
-	r.body = nil
-	r.bodyLength = 0
 }
 
 func (r *FcgiRequest) KeepAlive() {
@@ -178,7 +162,14 @@ func (r *FcgiRequest) SetTimeout(timeout time.Duration) {
 	r.timeout = timeout
 }
 
-func (r *FcgiRequest) CallOn(conn io.ReadWriter) (resp *http.Response, stderr []byte, err error) {
+func (r *FcgiRequest) AddCloseHook(hook func() error) {
+	if r.closedHook == nil {
+		r.closedHook = make([]func() error, 0, 5)
+	}
+	r.closedHook = append(r.closedHook, hook)
+}
+
+func (r *FcgiRequest) CallOn(conn io.ReadWriteCloser) (resp *http.Response, stderr []byte, err error) {
 	err = r.writeBeginRequest(conn)
 	if err != nil {
 		return nil, nil, err
@@ -195,6 +186,13 @@ func (r *FcgiRequest) CallOn(conn io.ReadWriter) (resp *http.Response, stderr []
 	}
 
 	return r.readStdout(conn)
+}
+
+func (r *FcgiRequest) Close() (err error) {
+	for _, hook := range r.closedHook {
+		err = errors.Join(err, hook())
+	}
+	return
 }
 
 func (r *FcgiRequest) writeBeginRequest(conn io.Writer) error {
@@ -215,7 +213,7 @@ func (r *FcgiRequest) writeParams(conn io.Writer) error {
 			if r.bodyLength > 0 {
 				r.params["CONTENT_LENGTH"] = fmt.Sprintf("%d", r.bodyLength)
 			} else {
-				return errors.New("[fcgi]'CONTENT_LENGTH' should be specified")
+				return errors.New("fcgi/request 'CONTENT_LENGTH' should be specified")
 			}
 		}
 	}
@@ -254,8 +252,7 @@ func (r *FcgiRequest) writeParams(conn io.Writer) error {
 		buf.WriteString(value)
 	}
 
-	err := r.writeRecord(conn, FCGI_PARAMS, buf.Bytes())
-	if err != nil {
+	if err := r.writeRecord(conn, FCGI_PARAMS, buf.Bytes()); err != nil {
 		return err
 	}
 
@@ -269,14 +266,11 @@ func (r *FcgiRequest) writeStdin(conn io.Writer) error {
 		buf := make([]byte, 1024*8)
 		for {
 			n, err := r.body.Read(buf)
-
 			if n > 0 {
-				err := r.writeRecord(conn, FCGI_STDIN, buf[:n])
-				if err != nil {
+				if err = r.writeRecord(conn, FCGI_STDIN, buf[:n]); err != nil {
 					return err
 				}
 			}
-
 			if err != nil {
 				break
 			}
@@ -333,48 +327,19 @@ var fcgiSrPool = sync.Pool{
 	},
 }
 
-func (r *FcgiRequest) readStdout(conn io.Reader) (resp *http.Response, stderr []byte, err error) {
-	stdout := bytes.NewBuffer(nil)
+var fcgiBufioPool = sync.Pool{
+	New: func() any {
+		return bufio.NewReader(nil)
+	},
+}
 
-	for {
-		respHeader := FcgiHeader{}
-		if err = binary.Read(conn, binary.BigEndian, &respHeader); err != nil {
-			return nil, nil, ErrClientDisconnect
-		}
-
-		// check request id
-		if respHeader.RequestId != r.id {
-			continue
-		}
-
-		b := make([]byte, respHeader.ContentLength+uint16(respHeader.PaddingLength))
-		if _, err = conn.Read(b); err != nil {
-			log.Error().Err(err).Msg("read stdout")
-			return nil, nil, ErrClientDisconnect
-		}
-
-		if respHeader.Type == FCGI_STDOUT {
-			stdout.Write(b[:respHeader.ContentLength])
-			continue
-		}
-
-		if respHeader.Type == FCGI_STDERR {
-			stderr = append(stderr, b[:respHeader.ContentLength]...)
-			continue
-		}
-
-		if respHeader.Type == FCGI_END_REQUEST {
-			break
-		}
-	}
-
-	if len(stderr) > 0 {
-		return nil, stderr, errors.New("fcgi:" + string(stderr))
-	}
-
+func (r *FcgiRequest) readStdout(conn io.ReadCloser) (resp *http.Response, stderr []byte, err error) {
 	sr := fcgiSrPool.Get().(*fcgiStreamReader)
-	sr.Reset(stdout)
-	tp := textproto.NewReader(&sr.Reader)
+	sr.Reset(conn, r.id)
+
+	br := fcgiBufioPool.Get().(*bufio.Reader)
+	br.Reset(sr)
+	tp := textproto.NewReader(br)
 
 	// Parse the response headers.
 	mimeHeader, err := tp.ReadMIMEHeader()
@@ -386,11 +351,11 @@ func (r *FcgiRequest) readStdout(conn io.Reader) (resp *http.Response, stderr []
 	resp.Header = http.Header(mimeHeader)
 
 	if resp.Header.Get("Status") != "" {
-		statusNumber, statusInfo, statusIsCut := strings.Cut(resp.Header.Get("Status"), " ")
+		statusNumber, statusInfo, statusFound := strings.Cut(resp.Header.Get("Status"), " ")
 		if resp.StatusCode, err = strconv.Atoi(statusNumber); err != nil {
 			return
 		}
-		if statusIsCut {
+		if statusFound {
 			resp.Status = statusInfo
 		}
 	} else {
@@ -401,7 +366,29 @@ func (r *FcgiRequest) readStdout(conn io.Reader) (resp *http.Response, stderr []
 	resp.TransferEncoding = resp.Header["Transfer-Encoding"]
 	resp.ContentLength, _ = strconv.ParseInt(resp.Header.Get("Content-Length"), 10, 64)
 
-	resp.Body = sr
+	// wrap the response body in our closer
+	closer := fcgiResponseBodyCloser{
+		Reader: br,
+		status: resp.StatusCode,
+		clear: func() (err error) {
+			fcgiBufioPool.Put(br)
+			if sr.stderr.Len() > 0 {
+				if resp.StatusCode >= 400 {
+					log.Error().Str("stderr", sr.stderr.String()).Msg("fcgi/request read stdout error")
+				} else {
+					log.Warn().Str("stderr", sr.stderr.String()).Msg("fcgi/request read stdout warn")
+				}
+			}
+			err = errors.Join(err, sr.Close())
+			err = errors.Join(err, r.Close())
+			return
+		},
+	}
+	if chunked(resp.TransferEncoding) {
+		closer.Reader = httputil.NewChunkedReader(br)
+	}
+
+	resp.Body = closer
 
 	return
 }
@@ -409,7 +396,6 @@ func (r *FcgiRequest) readStdout(conn io.Reader) (resp *http.Response, stderr []
 func (r *FcgiRequest) nextId() uint16 {
 	fcgiRequestIdLocker.Lock()
 	defer fcgiRequestIdLocker.Unlock()
-
 	fcgiCurrentRequestId++
 
 	if fcgiCurrentRequestId == math.MaxUint16 {
@@ -420,12 +406,92 @@ func (r *FcgiRequest) nextId() uint16 {
 }
 
 type fcgiStreamReader struct {
-	bufio.Reader
+	conn   io.Reader
+	rid    uint16
+	lr     io.LimitedReader
+	header FcgiHeader
+	stderr bytes.Buffer
 }
 
-func (sr *fcgiStreamReader) Close() error {
+func (sr *fcgiStreamReader) Reset(conn io.Reader, rid uint16) {
+	sr.conn = conn
+	sr.rid = rid
+	sr.lr.R = conn
+	sr.lr.N = 0
+	sr.header = FcgiHeader{}
+	sr.stderr.Reset()
+}
+
+func (sr *fcgiStreamReader) loadHeader() (err error) {
+	sr.lr.N = int64(sr.header.PaddingLength)
+	if _, err = io.Copy(io.Discard, &sr.lr); err != nil {
+		return ErrClientDisconnect
+	}
+	if err = binary.Read(sr.conn, binary.BigEndian, &sr.header); err != nil {
+		return ErrClientDisconnect
+	}
+	sr.lr.N = int64(sr.header.ContentLength)
+
+	return nil
+}
+
+func (sr *fcgiStreamReader) hasMore() bool {
+	return sr.lr.N > 0
+}
+
+func (sr *fcgiStreamReader) Read(p []byte) (n int, err error) {
+	for !sr.hasMore() {
+		if err = sr.loadHeader(); err != nil {
+			return 0, err
+		}
+
+		if sr.header.RequestId != sr.rid {
+			return 0, errors.New("fcgi request id mismatch")
+		}
+
+		switch sr.header.Type {
+		case FCGI_END_REQUEST:
+			body := FcgiEndRequestBody{}
+			if err = binary.Read(&sr.lr, binary.BigEndian, &body); err != nil {
+				err = ErrClientDisconnect
+			} else {
+				err = io.EOF
+			}
+			return
+		case FCGI_STDERR: // standard error output
+			if _, err = io.Copy(&sr.stderr, &sr.lr); err != nil {
+				err = ErrClientDisconnect
+			}
+			return
+		}
+	}
+
+	if err != nil {
+		return
+	}
+
+	return sr.lr.Read(p)
+}
+
+func (sr *fcgiStreamReader) Close() (err error) {
+	sr.lr.N = int64(sr.header.PaddingLength)
+	if _, err = io.Copy(io.Discard, &sr.lr); err != nil {
+		return ErrClientDisconnect
+	}
 	fcgiSrPool.Put(sr)
 	return nil
+}
+
+// fcgiResponseBodyCloser is a io.ReadCloser. It wraps a io.Reader with a Closer
+// that closes the client connection.
+type fcgiResponseBodyCloser struct {
+	io.Reader
+	status int
+	clear  func() error
+}
+
+func (f fcgiResponseBodyCloser) Close() error {
+	return f.clear()
 }
 
 func encodeSize(b []byte, size uint32) int {
@@ -437,3 +503,6 @@ func encodeSize(b []byte, size uint32) int {
 	b[0] = byte(size)
 	return 1
 }
+
+// Checks whether chunked is part of the encodings stack
+func chunked(te []string) bool { return len(te) > 0 && te[0] == "chunked" }

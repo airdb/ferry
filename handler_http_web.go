@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"expvar"
+	"fmt"
 	"net"
 	"net/http"
 	"net/http/pprof"
@@ -183,6 +184,10 @@ func (h *HTTPWebHandler) Load() error {
 			h.routers = append(h.routers, x)
 		}
 	}
+
+	h.mux.HandleFunc("/ping", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, "pong")
+	})
 
 	h.mux.HandleFunc("/debug/", func(rw http.ResponseWriter, req *http.Request) {
 		if ap, err := netip.ParseAddrPort(req.RemoteAddr); err == nil && !ap.Addr().IsGlobalUnicast() {

@@ -112,7 +112,7 @@ func (t FcgiTransport) RoundTrip(r *http.Request) (resp *http.Response, err erro
 	}
 
 	if len(stderr) > 0 {
-		err = errors.New("Fastcgi Error: " + strings.TrimSpace(string(stderr)))
+		err = errors.New("fcgi/transport Error: " + strings.TrimSpace(string(stderr)))
 		return nil, err
 	}
 
