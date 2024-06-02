@@ -1,0 +1,15 @@
+ARG ARCH="amd64"
+ARG OS="linux"
+FROM quay.io/prometheus/busybox-${OS}-${ARCH}:latest
+
+ARG ARCH="amd64"
+ARG OS="linux"
+COPY build/${OS}_${ARCH}/ /data/
+RUN mv /data/ferry /usr/sbin/
+RUN rm /data/ferry.sh
+
+WORKDIR /data
+ENV is_supervisor_process=1
+
+VOLUME     [ "/data" ]
+CMD        [ "/usr/sbin/ferry" ]
