@@ -15,6 +15,7 @@ import (
 const fcgiTestPoolSize = 5
 
 var cwd string
+var fcgiAddr = "/run/php/php8.2-fpm.sock"
 
 func TestMain(m *testing.M) {
 	var err error
@@ -28,9 +29,12 @@ func TestMain(m *testing.M) {
 }
 
 func TestFcgiClientGet(t *testing.T) {
+	if !fcgiAddrExist() {
+		return
+	}
 	client := &FcgiClient{
 		network: "unix",
-		address: "/run/php/php8.2-fpm.sock",
+		address: fcgiAddr,
 	}
 	err := client.Connect()
 	if err != nil {
@@ -64,9 +68,12 @@ func TestFcgiClientGet(t *testing.T) {
 }
 
 func TestFcgiClientGetAlive(t *testing.T) {
+	if !fcgiAddrExist() {
+		return
+	}
 	client := &FcgiClient{
 		network: "unix",
-		address: "/run/php/php8.2-fpm.sock",
+		address: fcgiAddr,
 	}
 	client.KeepAlive()
 	err := client.Connect()
@@ -101,9 +108,12 @@ func TestFcgiClientGetAlive(t *testing.T) {
 }
 
 func TestFcgiClientPost(t *testing.T) {
+	if !fcgiAddrExist() {
+		return
+	}
 	client := &FcgiClient{
 		network: "unix",
-		address: "/run/php/php8.2-fpm.sock",
+		address: fcgiAddr,
 	}
 	err := client.Connect()
 	if err != nil {
@@ -138,6 +148,9 @@ func TestFcgiClientPost(t *testing.T) {
 }
 
 func TestFcgiClientPerformance(t *testing.T) {
+	if !fcgiAddrExist() {
+		return
+	}
 	threads := 100
 	countRequests := 500
 	countSuccess := 0
@@ -147,7 +160,7 @@ func TestFcgiClientPerformance(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(threads)
 
-	pool := FcgiSharedPool("unix", "/run/php/php8.2-fpm.sock", fcgiTestPoolSize)
+	pool := FcgiSharedPool("unix", fcgiAddr, fcgiTestPoolSize)
 
 	for i := 0; i < threads; i++ {
 		go func(i int) {
@@ -200,7 +213,7 @@ func TestFcgiClientPerformance(t *testing.T) {
 }
 
 func BenchmarkFcgiClient_KeppAlive(b *testing.B) {
-	pool := FcgiSharedPool("unix", "/run/php/php8.2-fpm.sock", fcgiTestPoolSize)
+	pool := FcgiSharedPool("unix", fcgiAddr, fcgiTestPoolSize)
 	params := newParams()
 	params["REQUEST_METHOD"] = "GET"
 
@@ -224,6 +237,11 @@ func BenchmarkFcgiClient_KeppAlive(b *testing.B) {
 		io.Copy(io.Discard, resp.Body)
 		resp.Body.Close()
 	}
+}
+
+func fcgiAddrExist() bool {
+	_, err := os.Stat(fcgiAddr)
+	return os.IsExist(err)
 }
 
 func newParams() map[string]string {

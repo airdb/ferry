@@ -17,6 +17,7 @@ import (
 )
 
 var addr = fmt.Sprintf("/tmp/ferry-%d.sock", rand.Uint64())
+var fcgiPass = "unix:/run/php/php8.2-fpm.sock"
 
 // func TestMain(m *testing.M) {
 // 	// ln, err := net.Listen("unix", addr)
@@ -38,6 +39,9 @@ var addr = fmt.Sprintf("/tmp/ferry-%d.sock", rand.Uint64())
 // }
 
 func TestHTTPWebFcgiHandler_Load(t *testing.T) {
+	if !fcgiAddrExist() {
+		return
+	}
 	type fields struct {
 		Root       string
 		DefaultApp string
@@ -49,7 +53,7 @@ func TestHTTPWebFcgiHandler_Load(t *testing.T) {
 		fields  fields
 		wantErr bool
 	}{
-		{"", fields{Root: "./testdata", Pass: "unix:/run/php/php8.2-fpm.sock"}, false},
+		{"", fields{Root: "./testdata", Pass: fcgiPass}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -67,6 +71,9 @@ func TestHTTPWebFcgiHandler_Load(t *testing.T) {
 }
 
 func TestHTTPWebFcgiHandler_ServeHTTP(t *testing.T) {
+	if !fcgiAddrExist() {
+		return
+	}
 	cwd, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)
@@ -90,7 +97,7 @@ func TestHTTPWebFcgiHandler_ServeHTTP(t *testing.T) {
 	}{
 		{
 			name:   "serve time.php 01",
-			fields: fields{Root: path.Join(cwd, "./testdata"), Pass: "unix:/run/php/php8.2-fpm.sock"},
+			fields: fields{Root: path.Join(cwd, "./testdata"), Pass: fcgiPass},
 			args: args{
 				rw:  httptest.NewRecorder(),
 				req: httptest.NewRequest("GET", "/time.php", nil),
@@ -101,7 +108,7 @@ func TestHTTPWebFcgiHandler_ServeHTTP(t *testing.T) {
 		},
 		{
 			name:   "serve time.php 02",
-			fields: fields{Root: path.Join(cwd, "./testdata"), Pass: "unix:/run/php/php8.2-fpm.sock"},
+			fields: fields{Root: path.Join(cwd, "./testdata"), Pass: fcgiPass},
 			args: args{
 				rw:  httptest.NewRecorder(),
 				req: httptest.NewRequest("GET", "/time.php", nil),
@@ -112,7 +119,7 @@ func TestHTTPWebFcgiHandler_ServeHTTP(t *testing.T) {
 		},
 		{
 			name:   "serve time.php 03",
-			fields: fields{Root: path.Join(cwd, "./testdata"), Pass: "unix:/run/php/php8.2-fpm.sock"},
+			fields: fields{Root: path.Join(cwd, "./testdata"), Pass: fcgiPass},
 			args: args{
 				rw:  httptest.NewRecorder(),
 				req: httptest.NewRequest("GET", "/time.php", nil),
@@ -154,7 +161,7 @@ func BenchmarkHTTPWebFcgiHandler_ServeHTTP_With_KeppAlive(b *testing.B) {
 
 	h := &HTTPWebFcgiHandler{
 		Root:      path.Join(cwd, "testdata"),
-		Pass:      "unix:/run/php/php8.2-fpm.sock",
+		Pass:      fcgiPass,
 		KeepAlive: true,
 	}
 	h.Load()
@@ -184,7 +191,7 @@ func BenchmarkHTTPWebFcgiHandler_ServeHTTP_Without_KeppAlive(b *testing.B) {
 
 	h := &HTTPWebFcgiHandler{
 		Root:      path.Join(cwd, "testdata"),
-		Pass:      "unix:/run/php/php8.2-fpm.sock",
+		Pass:      fcgiPass,
 		KeepAlive: false,
 	}
 	h.Load()

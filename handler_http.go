@@ -65,7 +65,14 @@ func (h *HTTPServerHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request)
 	ri := riPool.Get().(*RequestInfo)
 	defer riPool.Put(ri)
 
-	ri.RemoteIP, _, _ = net.SplitHostPort(req.RemoteAddr)
+	if s := req.Header.Get("cf-connecting-ip"); s != "" {
+		ri.RemoteIP = s
+	} else if s := req.Header.Get("x-forwarded-for"); s != "" {
+		ri.RemoteIP = s
+	} else {
+		ri.RemoteIP, _, _ = net.SplitHostPort(req.RemoteAddr)
+	}
+
 	ri.ServerAddr = req.Context().Value(http.LocalAddrContextKey).(net.Addr).String()
 	if req.TLS != nil {
 		ri.ServerName = req.TLS.ServerName
@@ -125,14 +132,23 @@ func (h *HTTPServerHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request)
 		slices.ContainsFunc(h.ServerNames, func(s string) bool { return s != "" && s[0] == '*' && strings.HasSuffix(hostname, s[1:]) })
 
 	req = req.WithContext(context.WithValue(req.Context(), RequestInfoContextKey, ri))
+
+	var handler HTTPHandler
+
 	switch {
 	case hostname != "" && !containsHostname:
-		h.ForwardHandler.ServeHTTP(rw, req)
+		handler = h.ForwardHandler
 	case containsHostname && h.Config.Forward.Websocket != "" && req.URL.Path == h.Config.Forward.Websocket && ((req.Method == http.MethodGet && req.ProtoMajor == 1) || (req.Method == http.MethodConnect && req.ProtoAtLeast(2, 0))):
-		h.ForwardHandler.ServeHTTP(rw, req)
+		handler = h.ForwardHandler
 	case req.Method == http.MethodConnect:
-		h.ForwardHandler.ServeHTTP(rw, req)
+		handler = h.ForwardHandler
 	default:
-		h.WebHandler.ServeHTTP(rw, req)
+		handler = h.WebHandler
+	}
+
+	if h.Config.Compress != 0 {
+		modCompressGzip(handler, h.Config.Compress).ServeHTTP(rw, req)
+	} else {
+		handler.ServeHTTP(rw, req)
 	}
 }

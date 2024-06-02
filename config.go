@@ -15,13 +15,14 @@ type HTTPConfig struct {
 	ServerName   []string `json:"server_name" yaml:"server_name"`
 	Keyfile      string   `json:"keyfile" yaml:"keyfile"`
 	Certfile     string   `json:"certfile" yaml:"certfile"`
+	Compress     int      `json:"compress" yaml:"compress"`
 	ServerConfig map[string]struct {
 		Keyfile        string `json:"keyfile" yaml:"keyfile"`
 		Certfile       string `json:"certfile" yaml:"certfile"`
 		DisableHttp2   bool   `json:"disable_http2" yaml:"disable_http2"`
 		DisableHttp3   bool   `json:"disable_http3" yaml:"disable_http3"`
 		DisableTls11   bool   `json:"disable_tls11" yaml:"disable_tls11"`
-		PreferChacha20 bool   `json:"perfer_chacha20" yaml:"perfer_chacha20"`
+		PreferChacha20 bool   `json:"prefer_chacha20" yaml:"prefer_chacha20"`
 	} `json:"server_config" yaml:"server_config"`
 	Sniproxy []struct {
 		ServerName  string `json:"server_name" yaml:"server_name"`
