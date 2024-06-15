@@ -16,7 +16,7 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/go-task/slim-sprig/v3"
+	sprig "github.com/go-task/slim-sprig/v3"
 	"github.com/phuslu/geosite"
 	"github.com/phuslu/log"
 	"github.com/phuslu/lru"
@@ -85,6 +85,7 @@ func (f *Functions) Load() error {
 	f.FuncMap["isInNet"] = f.isInNet
 	f.FuncMap["isInFile"] = f.isInFile
 	f.FuncMap["readfile"] = f.readfile
+	f.FuncMap["tldplus1"] = f.tldplus1
 
 	return nil
 }
@@ -202,6 +203,11 @@ func (f *Functions) domain(domain string) string {
 		domain = s
 	}
 
+	s, _ := publicsuffix.EffectiveTLDPlusOne(domain)
+	return s
+}
+
+func (f *Functions) tldplus1(domain string) string {
 	s, _ := publicsuffix.EffectiveTLDPlusOne(domain)
 	return s
 }
