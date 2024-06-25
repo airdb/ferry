@@ -1,3 +1,6 @@
+include:
+  - conf.d/*.yaml
+
 global:
   log_level: info
   log_backups: 2

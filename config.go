@@ -196,6 +196,9 @@ func NewConfig(filename string) (*Config, error) {
 }
 
 func (c *Config) LoadInclude() (err error) {
+	if c.Dialer == nil {
+		c.Dialer = make(map[string]string)
+	}
 	for _, s := range c.Include {
 		err = c.loadInclude(s)
 		if err != nil {
@@ -220,9 +223,9 @@ func (c *Config) loadInclude(s string) error {
 		cSub := new(Config)
 		switch filepath.Ext(filename) {
 		case ".json":
-			err = json.Unmarshal(data, c)
+			err = json.Unmarshal(data, cSub)
 		case ".yaml":
-			err = yaml.Unmarshal(data, c)
+			err = yaml.Unmarshal(data, cSub)
 		default:
 			err = fmt.Errorf("format of %s not supportted", filename)
 		}
