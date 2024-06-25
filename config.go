@@ -115,7 +115,8 @@ type SSHTunConfig struct {
 }
 
 type Config struct {
-	Global struct {
+	Include []string `json:"include" yaml:"include"`
+	Global  struct {
 		LogLevel         string `json:"log_level" yaml:"log_level"`
 		LogBackups       int    `json:"log_backups" yaml:"log_backups"`
 		LogMaxsize       int64  `json:"log_maxsize" yaml:"log_maxsize"`
@@ -181,9 +182,68 @@ func NewConfig(filename string) (*Config, error) {
 		return nil, fmt.Errorf("yaml.Decode(%#v) error: %w", filename, err)
 	}
 
+	if err = c.LoadInclude(); err != nil {
+		return nil, err
+	}
+
 	if filename == "development.yaml" {
 		fmt.Fprintf(os.Stderr, "%s WAN 1 config.go:122 > ferry is running in the development mode.\n", timeNow().Format("15:04:05"))
 	}
 
+	// TODO: listen port conflict
+
 	return c, nil
+}
+
+func (c *Config) LoadInclude() (err error) {
+	for _, s := range c.Include {
+		err = c.loadInclude(s)
+		if err != nil {
+			return
+		}
+	}
+
+	return nil
+}
+
+func (c *Config) loadInclude(s string) error {
+	filenames, err := filepath.Glob(s)
+	if err != nil {
+		return err
+	}
+	for _, filename := range filenames {
+		data, err := os.ReadFile(filename)
+		if err != nil {
+			return err
+		}
+
+		cSub := new(Config)
+		switch filepath.Ext(filename) {
+		case ".json":
+			err = json.Unmarshal(data, c)
+		case ".yaml":
+			err = yaml.Unmarshal(data, c)
+		default:
+			err = fmt.Errorf("format of %s not supportted", filename)
+		}
+		if err != nil {
+			return fmt.Errorf("yaml.Decode(%#v) error: %w", filename, err)
+		}
+
+		c.Cron = append(c.Cron, cSub.Cron...)
+		for k, v := range cSub.Dialer {
+			if _, ok := c.Dialer[k]; !ok {
+				c.Dialer[k] = v
+			} else {
+				return fmt.Errorf("dialer already exist(%#v)", k)
+			}
+		}
+		c.Https = append(c.Https, cSub.Https...)
+		c.Http = append(c.Http, cSub.Http...)
+		c.Socks = append(c.Socks, cSub.Socks...)
+		c.SSHTun = append(c.SSHTun, cSub.SSHTun...)
+		c.Stream = append(c.Stream, cSub.Stream...)
+	}
+
+	return nil
 }
