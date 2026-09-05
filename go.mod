@@ -16,7 +16,7 @@ require (
 	github.com/tg123/go-htpasswd v1.2.2
 	github.com/valyala/bytebufferpool v1.0.0
 	go.uber.org/ratelimit v0.3.1
-	golang.org/x/crypto v0.51.0
+	golang.org/x/crypto v0.52.0
 	golang.org/x/net v0.55.0
 	golang.org/x/sys v0.45.0
 	gopkg.in/yaml.v3 v3.0.1
